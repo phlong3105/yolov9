@@ -112,6 +112,7 @@ def run(opt, nosave: bool = False):
 
         # NMS
         with dt[2]:
+            pred = pred[0] if isinstance(pred, list | tuple) else pred  # YOLO model in validation model, output = (inference_out, loss_out)
             pred = non_max_suppression(
                 prediction = pred,
                 conf_thres = conf_thres,
