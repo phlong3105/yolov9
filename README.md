@@ -116,7 +116,7 @@ cd /yolov9
 python val.py --data data/coco.yaml --img 640 --batch 32 --conf 0.001 --iou 0.7 --device 0 --weights './yolov9-c-converted.pt' --save-json --name yolov9_c_c_640_val
 
 # evaluate yolov9 models
-#python val_dual.py --data data/coco.yaml --img 640 --batch 32 --conf 0.001 --iou 0.7 --device 0 --weights './yolov9-c.pt' --save-json --name yolov9_c_640_val
+# python val_dual.py --data data/coco.yaml --img 640 --batch 32 --conf 0.001 --iou 0.7 --device 0 --weights './yolov9-c.pt' --save-json --name yolov9_c_640_val
 
 # evaluate gelan models
 # python val.py --data data/coco.yaml --img 640 --batch 32 --conf 0.001 --iou 0.7 --device 0 --weights './gelan-c.pt' --save-json --name gelan_c_640_val
@@ -176,6 +176,26 @@ python -m torch.distributed.launch --nproc_per_node 8 --master_port 9527 train_d
 See [reparameterization.ipynb](https://github.com/WongKinYiu/yolov9/blob/main/tools/reparameterization.ipynb).
 
 
+## Inference
+
+<div align="center">
+    <a href="./">
+        <img src="./figure/horses_prediction.jpg" width="49%"/>
+    </a>
+</div>
+
+``` shell
+# inference converted yolov9 models
+python detect.py --source './data/images/horses.jpg' --img 640 --device 0 --weights './yolov9-c-converted.pt' --name yolov9_c_c_640_detect
+
+# inference yolov9 models
+# python detect_dual.py --source './data/images/horses.jpg' --img 640 --device 0 --weights './yolov9-c.pt' --name yolov9_c_640_detect
+
+# inference gelan models
+# python detect.py --source './data/images/horses.jpg' --img 640 --device 0 --weights './gelan-c.pt' --name gelan_c_c_640_detect
+```
+
+
 ## Citation
 
 ```
@@ -220,7 +240,7 @@ python train.py --workers 8 --device 0 --batch 32 --data data/coco.yaml --img 64
 ``` shell
 # coco/labels/{split}/*.txt
 # polygon (1 instance 1 line)
-python segment/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/segment/gelan-c-seg.yaml --weights '' --name gelan-c-seg --hyp hyp.scratch-high.yaml --epochs 300 --close-mosaic 10 --no-overlap
+python segment/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/segment/gelan-c-seg.yaml --weights '' --name gelan-c-seg --hyp hyp.scratch-high.yaml --no-overlap --epochs 300 --close-mosaic 10
 ```
 
 #### Panoptic Segmentation
@@ -230,7 +250,7 @@ python segment/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --im
 # polygon (1 instance 1 line)
 # coco/stuff/{split}/*.txt
 # polygon (1 semantic 1 line)
-python panoptic/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/panoptic/gelan-c-pan.yaml --weights '' --name gelan-c-pan --hyp hyp.scratch-high.yaml --epochs 300 --close-mosaic 10 --no-overlap
+python panoptic/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/panoptic/gelan-c-pan.yaml --weights '' --name gelan-c-pan --hyp hyp.scratch-high.yaml --no-overlap --epochs 300 --close-mosaic 10
 ```
 
 #### Image Captioning (not yet released)
@@ -242,7 +262,7 @@ python panoptic/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --i
 # polygon (1 semantic 1 line)
 # coco/annotations/*.json
 # json (1 split 1 file)
-python caption/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/caption/gelan-c-cap.yaml --weights '' --name gelan-c-cap --hyp hyp.scratch-high.yaml --epochs 300 --close-mosaic 10 --no-overlap
+python caption/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/caption/gelan-c-cap.yaml --weights '' --name gelan-c-cap --hyp hyp.scratch-high.yaml --no-overlap --epochs 300 --close-mosaic 10
 ```
 
 
