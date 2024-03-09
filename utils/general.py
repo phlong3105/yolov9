@@ -511,7 +511,7 @@ def check_dataset(data, autodownload=True):
         data['names'] = dict(enumerate(data['names']))  # convert to dict
     assert all(isinstance(k, int) for k in data['names'].keys()), 'data.yaml names keys must be integers, i.e. 2: car'
     data['nc'] = len(data['names'])
-
+    
     # Resolve paths
     path = Path(extract_dir or data.get('path') or '')  # optional 'path' default to '.'
     if not path.is_absolute():
@@ -526,7 +526,7 @@ def check_dataset(data, autodownload=True):
                 data[k] = str(x)
             else:
                 data[k] = [str((path / x).resolve()) for x in data[k]]
-
+    
     # Parse yaml
     train, val, test, s = (data.get(x) for x in ('train', 'val', 'test', 'download'))
     if val:
