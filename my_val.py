@@ -32,7 +32,7 @@ from utils.general import (
 )
 from utils.metrics import ap_per_class, box_iou, ConfusionMatrix
 from utils.plots import output_to_target, plot_images, plot_val_study
-from utils.torch_utils import select_device, smart_inference_mode
+from utils.my_torch_utils import select_device, smart_inference_mode
 
 general.DATASETS_DIR = DATA_DIR
 
@@ -204,7 +204,10 @@ def run(
         names = dict(enumerate(names))
     class_map = coco80_to_coco91_class() if is_coco else list(range(1000))
     s    = ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "P", "R", "mAP50", "mAP50-95")
-    tp, fp, p, r, f1, mp, mr, map50, ap50, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    # tp, fp, p, r, f1, mp, mr, map50, ap50, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    tp, fp, p, r, f1, ap50,  = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    mp50, mr50, mf150, map50 = 0.0, 0.0, 0.0, 0.0
+    mp, mr, mf1, map         = 0.0, 0.0, 0.0, 0.0
     dt   = Profile(), Profile(), Profile()  # profiling times
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
@@ -295,8 +298,12 @@ def run(
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
         tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plots, save_dir=save_dir, names=names)
-        ap50, ap                       = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-        mp, mr, map50, map             = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        # ap50, ap               = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+        # mp, mr, map50, map     = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        p50, r50, f150, ap50     = p[:, 0], r[:, 0], f1[:, 0], ap[:, 0]              # [P@0.5, R@0.5, F1@0.5, AP@0.5]
+        p, r, f1, ap             = p.mean(1), r.mean(1), f1.mean(1), ap.mean(1)      # [P@0.5:0.95, R@0.5:0.95, F1@0.5:0.95, AP@0.5:0.95]
+        mp50, mr50, mf150, map50 = p50.mean(), r50.mean(), f150.mean(), ap50.mean()  # [mP@0.5, mR@0.5, mF1@0.5, mAP@0.5]
+        mp, mr, mf1, map         = p.mean(), r.mean(), f1.mean(), ap.mean()          # [mP@0.5:0.95, mR@0.5:0.95, mF1@0.5:0.95, mAP@0.5:0.95]
     nt = np.bincount(stats[3].astype(int), minlength=nc)  # number of targets per class
 
     # Print results
@@ -355,7 +362,7 @@ def run(
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp50, mr50, mf150, map50, mp, mr, mf1, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
 
 # endregion
 
@@ -394,38 +401,46 @@ def main(
     hostname = socket.gethostname().lower()
     
     # Get config args
-    config = core.parse_config_file(project_root=_current_dir / "config", config=config)
-    args   = core.load_config(config)
+    config   = core.parse_config_file(project_root=_current_dir / "config", config=config)
+    args     = core.load_config(config)
     
     # Prioritize input args --> config file args
-    root     = root      or args["root"]
+    root     = root     or args["root"]
+    weights  = weights  or args["weights"]
+    model    = model    or args["model"]
+    data     = data     or args["data"]
+    project  = args["project"]
+    fullname = fullname or args["name"]
+    device   = device   or args["device"]
+    imgsz    = imgsz    or args["imgsz"]
+    verbose  = verbose  or args["verbose"]
+    
+    # Parse arguments
     root     = core.Path(root)
-    weights  = weights   or args["weights"]
-    model    = core.Path(model or args["model"])
+    weights  = core.to_list(weights)
+    
+    model    = core.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
-    model    = model.config_file()
-    data     = core.Path(data or args["data"])
+    model    = str(model.config_file())
+    data     = core.Path(data)
     data     = data  if data.exists() else _current_dir / "data"  / data.name
-    data     = data.config_file()
-    project  = root.name or args["project"]
-    fullname = fullname  or args["name"]
+    data     = str(data.config_file())
+    project  = root.name or project
     save_dir = save_dir  or root / "run" / "test" / fullname
     save_dir = core.Path(save_dir)
-    device   = device    or args["device"]
-    imgsz    = imgsz     or args["imgsz"]
-    verbose  = verbose   or args["verbose"]
+    imgsz    = core.to_list(imgsz)
     
     # Update arguments
     args["root"]     = root
     args["config"]   = config
-    args["weights"]  = core.to_list(weights)
-    args["model"]    = str(model)
-    args["data"]     = str(data)
+    args["weights"]  = weights
+    args["model"]    = model
+    args["data"]     = data
     args["project"]  = project
     args["name"]     = fullname
     args["save_dir"] = save_dir
     args["device"]   = device
-    args["imgsz"]    = core.to_list(imgsz)
+    args["imgsz"]    = imgsz
     args["verbose"]  = verbose
     
     opt            = argparse.Namespace(**args)

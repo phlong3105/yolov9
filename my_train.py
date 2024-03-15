@@ -43,12 +43,12 @@ from utils.general import (
     increment_path, init_seeds, intersect_dicts, labels_to_class_weights, labels_to_image_weights, LOGGER, methods,
     one_cycle, one_flat_cycle, print_args, print_mutation, strip_optimizer, TQDM_BAR_FORMAT, yaml_save,
 )
-from utils.loggers import Loggers
-from utils.loggers.comet.comet_utils import check_comet_resume
+from utils.my_loggers import Loggers
+from utils.my_loggers.comet.comet_utils import check_comet_resume
 from utils.loss_tal_dual import ComputeLoss
 from utils.metrics import fitness
 from utils.plots import plot_evolve
-from utils.torch_utils import (
+from utils.my_torch_utils import (
     de_parallel, EarlyStopping, ModelEMA, select_device, smart_DDP, smart_optimizer, smart_resume,
     torch_distributed_zero_first,
 )
@@ -188,10 +188,25 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     ema = ModelEMA(model) if RANK in {-1, 0} else None
 
     # Resume
-    best_fitness, start_epoch = 0.0, 0
+    start_epoch       = 0
+    best_fitness      = 0.0
+    best_fitness_p50  = 0.0
+    best_fitness_r50  = 0.0
+    best_fitness_f50  = 0.0
+    best_fitness_ap50 = 0.0
+    best_fitness_p    = 0.0
+    best_fitness_r    = 0.0
+    best_fitness_f    = 0.0
+    best_fitness_ap   = 0.0
+    
     if pretrained:
         if resume:
-            best_fitness, start_epoch, epochs = smart_resume(ckpt, optimizer, ema, weights, epochs, resume)
+            (
+                best_fitness,
+                best_fitness_p50, best_fitness_r50, best_fitness_f50, best_fitness_ap50,
+                best_fitness_p, best_fitness_r, best_fitness_f, best_fitness_ap,
+                start_epoch, epochs
+             ) = smart_resume(ckpt, optimizer, ema, weights, epochs, resume)
         del ckpt, csd
 
     # DP mode
@@ -274,7 +289,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     last_opt_step = -1
     maps          = np.zeros(nc)  # mAP per class
-    results       = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+    results       = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler        = torch.cuda.amp.GradScaler(enabled=amp)
     stopper       = EarlyStopping(patience=opt.patience)
@@ -508,43 +523,50 @@ def main(
     hostname = socket.gethostname().lower()
     
     # Get config args
-    config = core.parse_config_file(project_root=_current_dir / "config", config=config)
-    args   = core.load_config(config)
+    config   = core.parse_config_file(project_root=_current_dir / "config", config=config)
+    args     = core.load_config(config)
     
     # Prioritize input args --> config file args
-    root     = root      or args["root"]
+    root     = root     or args["root"]
+    weights  = weights  or args["weights"]
+    model    = model    or args["model"]
+    data     = args["data"]
+    project  = args["project"]
+    fullname = fullname or args["name"]
+    device   = device   or args["device"]
+    hyp      = args["hyp"]
+    epochs   = epochs   or args["epochs"]
+    exist_ok = exist_ok or args["exist_ok"]
+    verbose  = verbose  or args["verbose"]
+    
+    # Parse arguments
     root     = core.Path(root)
-    weights  = weights   or args["weights"]
-    model    = core.Path(model or args["model"])
+    weights  = core.to_list(weights)
+    model    = core.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
-    model    = model.config_file()
-    data     = core.Path(args["data"])
+    model    = str(model.config_file())
+    data     = core.Path(data)
     data     = data  if data.exists() else _current_dir / "data" / data.name
-    data     = data.config_file()
-    project  = root.name or args["project"]
-    fullname = fullname  or args["name"]
+    data     = str(data.config_file())
+    project  = root.name or project
     save_dir = save_dir  or root / "run" / "train" / fullname
     save_dir = core.Path(save_dir)
-    device   = device    or args["device"]
-    hyp      = core.Path(args["hyp"])
+    hyp      = core.Path(hyp)
     hyp      = hyp if hyp.exists() else _current_dir / "data/hyps" / hyp.name
-    hyp      = hyp.yaml_file()
-    epochs   = epochs    or args["epochs"]
-    exist_ok = exist_ok  or args["exist_ok"]
-    verbose  = verbose   or args["verbose"]
+    hyp      = str(hyp.yaml_file())
     
     # Update arguments
     args["root"]       = root
     args["config"]     = config
     args["weights"]    = weights
-    args["model"]      = str(model)
-    args["data"]       = str(data)
+    args["model"]      = model
+    args["data"]       = data
     args["project"]    = project
     args["name"]       = fullname
     args["save_dir"]   = save_dir
     args["device"]     = device
     args["local_rank"] = local_rank
-    args["hyp"]        = str(hyp)
+    args["hyp"]        = hyp
     args["epochs"]     = epochs
     args["steps"]      = steps
     args["exist_ok"]   = exist_ok
@@ -690,8 +712,17 @@ def main(
             callbacks = Callbacks()
             # Write mutation results
             keys = (
-                "metrics/precision", "metrics/recall", "metrics/mAP@0.5", "metrics/mAP@[0.5:0.95]",
-                "val/box_loss", "val/obj_loss", "val/cls_loss"
+                "metrics/precision@0.5(B)",
+                "metrics/recall@0.5(B)",
+                "metrics/f1@0.5(B)",
+                "metrics/map@0.5(B)",
+                "metrics/precision@0.5-0.95(B)",
+                "metrics/recall@0.5-0.95(B)",
+                "metrics/f1@0.5-0.95(B)",
+                "metrics/map@0.5-0.95(B)",
+                "val/box_loss",
+                "val/obj_loss",
+                "val/cls_loss",
             )
             print_mutation(keys, results, hyp.copy(), save_dir, opt.bucket)
 
