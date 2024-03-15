@@ -63,13 +63,10 @@ class Loggers():
             "train/box_loss",
             "train/cls_loss",
             "train/dfl_loss",  # train loss
-            "metrics/precision@0.5(B)",
-            "metrics/recall@0.5(B)",
-            "metrics/f1@0.5(B)",
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/f1(B)",
             "metrics/map@0.5(B)",
-            "metrics/precision@0.5-0.95(B)",
-            "metrics/recall@0.5-0.95(B)",
-            "metrics/f1@0.5-0.95(B)",
             "metrics/map@0.5-0.95(B)",  # metrics
             "val/box_loss",
             "val/cls_loss",
@@ -242,7 +239,7 @@ class Loggers():
 
         if self.wandb:
             if best_fitness == fi:
-                best_results = [epoch] + vals[3:10]
+                best_results = [epoch] + vals[3:8]
                 for i, name in enumerate(self.best_keys):
                     self.wandb.wandb_run.summary[name] = best_results[i]  # log best results in the summary
             self.wandb.log(x)
@@ -281,7 +278,7 @@ class Loggers():
                 self.tb.add_image(f.stem, cv2.imread(str(f))[..., ::-1], epoch, dataformats='HWC')
 
         if self.wandb:
-            self.wandb.log(dict(zip(self.keys[3:16], results)))
+            self.wandb.log(dict(zip(self.keys[3:14], results)))
             self.wandb.log({"Results": [wandb.Image(str(f), caption=f.name) for f in files]})
             # Calling wandb.log. TODO: Refactor this into WandbLogger.log_model
             if not self.opt.evolve:

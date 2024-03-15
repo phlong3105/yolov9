@@ -459,24 +459,18 @@ def smart_resume(ckpt, optimizer, ema=None, weights='yolov5s.pt', epochs=300, re
     # Resume training from a partially trained checkpoint
     start_epoch       = ckpt['epoch'] + 1
     best_fitness      = 0.0
-    best_fitness_p50  = 0.0
-    best_fitness_r50  = 0.0
-    best_fitness_f50  = 0.0
-    best_fitness_ap50 = 0.0
     best_fitness_p    = 0.0
     best_fitness_r    = 0.0
-    best_fitness_f    = 0.0
+    best_fitness_f1   = 0.0
+    best_fitness_ap50 = 0.0
     best_fitness_ap   = 0.0
     if ckpt['optimizer'] is not None:
         optimizer.load_state_dict(ckpt['optimizer'])  # optimizer
         best_fitness      = ckpt["best_fitness"]
-        best_fitness_p50  = ckpt["best_fitness_p50"]
-        best_fitness_r50  = ckpt["best_fitness_r50"]
-        best_fitness_f50  = ckpt["best_fitness_f50"]
-        best_fitness_ap50 = ckpt["best_fitness_ap50"]
         best_fitness_p    = ckpt["best_fitness_p"]
         best_fitness_r    = ckpt["best_fitness_r"]
-        best_fitness_f    = ckpt["best_fitness_f"]
+        best_fitness_f1   = ckpt["best_fitness_f1"]
+        best_fitness_ap50 = ckpt["best_fitness_ap50"]
         best_fitness_ap   = ckpt["best_fitness_ap"]
     if ema and ckpt.get('ema'):
         ema.ema.load_state_dict(ckpt['ema'].float().state_dict())  # EMA
@@ -490,9 +484,13 @@ def smart_resume(ckpt, optimizer, ema=None, weights='yolov5s.pt', epochs=300, re
         epochs += ckpt['epoch']  # finetune additional epochs
     return (
         best_fitness,
-        best_fitness_p50, best_fitness_r50, best_fitness_f50, best_fitness_ap50,
-        best_fitness_p, best_fitness_r, best_fitness_f, best_fitness_ap,
-        start_epoch, epochs
+        best_fitness_p,
+        best_fitness_r,
+        best_fitness_f1,
+        best_fitness_ap50,
+        best_fitness_ap,
+        start_epoch,
+        epochs
     )
 
 

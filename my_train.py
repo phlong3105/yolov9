@@ -46,7 +46,7 @@ from utils.general import (
 from utils.my_loggers import Loggers
 from utils.my_loggers.comet.comet_utils import check_comet_resume
 from utils.loss_tal_dual import ComputeLoss
-from utils.metrics import fitness
+from utils.my_metrics import fitness, fitness_ap, fitness_ap50, fitness_f1, fitness_p, fitness_r
 from utils.plots import plot_evolve
 from utils.my_torch_utils import (
     de_parallel, EarlyStopping, ModelEMA, select_device, smart_DDP, smart_optimizer, smart_resume,
@@ -190,22 +190,23 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # Resume
     start_epoch       = 0
     best_fitness      = 0.0
-    best_fitness_p50  = 0.0
-    best_fitness_r50  = 0.0
-    best_fitness_f50  = 0.0
-    best_fitness_ap50 = 0.0
     best_fitness_p    = 0.0
     best_fitness_r    = 0.0
-    best_fitness_f    = 0.0
+    best_fitness_f1   = 0.0
+    best_fitness_ap50 = 0.0
     best_fitness_ap   = 0.0
-    
+
     if pretrained:
         if resume:
             (
                 best_fitness,
-                best_fitness_p50, best_fitness_r50, best_fitness_f50, best_fitness_ap50,
-                best_fitness_p, best_fitness_r, best_fitness_f, best_fitness_ap,
-                start_epoch, epochs
+                best_fitness_p,
+                best_fitness_r,
+                best_fitness_f1,
+                best_fitness_ap50,
+                best_fitness_ap,
+                start_epoch,
+                epochs
              ) = smart_resume(ckpt, optimizer, ema, weights, epochs, resume)
         del ckpt, csd
 
@@ -289,7 +290,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     last_opt_step = -1
     maps          = np.zeros(nc)  # mAP per class
-    results       = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+    results       = (0, 0, 0, 0, 0, 0, 0, 0)  # P, R, F1, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler        = torch.cuda.amp.GradScaler(enabled=amp)
     stopper       = EarlyStopping(patience=opt.patience)
@@ -329,7 +330,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             callbacks.run("on_train_batch_start")
-            ni = i + nb * epoch  # number integrated batches (since train start)
+            ni   = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
 
             # Warmup
@@ -389,7 +390,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         # Scheduler
         lr = [x["lr"] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
-
+        
         if RANK in {-1, 0}:
             # mAP
             callbacks.run("on_train_epoch_end", epoch=epoch)
@@ -399,7 +400,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 results, maps, _ = validate.run(
                     opt          = opt,
                     data         = data_dict,
-                    batch_size   = batch_size   // WORLD_SIZE * 2,
+                    batch_size   = batch_size // WORLD_SIZE * 2,
                     imgsz        = imgsz,
                     conf_thres   = opt.conf_thres,
                     iou_thres    = opt.iou_thres,
@@ -413,34 +414,73 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                     callbacks    = callbacks,
                     compute_loss = compute_loss
                 )
-
+            
             # Update best mAP
-            fi   = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
-            stop = stopper(epoch=epoch, fitness=fi)  # early stop check
+            fi      = fitness(np.array(results).reshape(1, -1))         # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            fi_p    = fitness_p(np.array(results).reshape(1, -1))       # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            fi_r    = fitness_r(np.array(results).reshape(1, -1))       # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            if (fi_p > 0.0) or (fi_r > 0.0):
+                fi_f1 = fitness_f1(np.array(results).reshape(1, -1))      # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            else:
+                fi_f1 = 0.0
+            fi_ap50 = fitness_ap50(np.array(results).reshape(1, -1))    # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            fi_ap   = fitness_ap(np.array(results).reshape(1, -1))      # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
+            
             if fi > best_fitness:
-                best_fitness = fi
+                best_fitness      = fi
+            if fi_ap50 > best_fitness_ap50:
+                best_fitness_ap50 = fi_ap50
+            if fi_p > best_fitness_p:
+                best_fitness_p    = fi_p
+            if fi_r > best_fitness_r:
+                best_fitness_r    = fi_r
+            if fi_f1 > best_fitness_f1:
+                best_fitness_f1   = fi_f1
+            if fi_ap > best_fitness_ap:
+                best_fitness_ap   = fi_ap
+                
+            stop     = stopper(epoch=epoch, fitness=fi)  # early stop check
+            results  = list(results)
+            results.insert(2, fi_f1)
             log_vals = list(mloss) + list(results) + lr
             callbacks.run('on_fit_epoch_end', log_vals, epoch, best_fitness, fi)
-
+            
             # Save model
             if (not nosave) or (final_epoch and not evolve):  # if save
                 ckpt = {
-                    "epoch"       : epoch,
-                    "best_fitness": best_fitness,
-                    "model"       : deepcopy(de_parallel(model)).half(),
-                    "ema"         : deepcopy(ema.ema).half(),
-                    "updates"     : ema.updates,
-                    "optimizer"   : optimizer.state_dict(),
-                    "opt"         : vars(opt),
-                    "git"         : GIT_INFO,  # {remote, branch, commit} if a git repo
-                    "date"        : datetime.now().isoformat()}
-
+                    "epoch"            : epoch,
+                    "best_fitness"     : best_fitness,
+                    "best_fitness_p"   : best_fitness_p,
+                    "best_fitness_r"   : best_fitness_r,
+                    "best_fitness_f1"  : best_fitness_f1,
+                    "best_fitness_ap50": best_fitness_ap50,
+                    "best_fitness_ap"  : best_fitness_ap,
+                    "model"            : deepcopy(de_parallel(model)).half(),
+                    "ema"              : deepcopy(ema.ema).half(),
+                    "updates"          : ema.updates,
+                    "optimizer"        : optimizer.state_dict(),
+                    "opt"              : vars(opt),
+                    "git"              : GIT_INFO,  # {remote, branch, commit} if a git repo
+                    "date"             : datetime.now().isoformat()}
+                
                 # Save last, best and delete
                 torch.save(ckpt, last)
                 if best_fitness == fi:
                     torch.save(ckpt, best)
-                if opt.save_period > 0 and epoch % opt.save_period == 0:
-                    torch.save(ckpt, w / f"epoch{epoch}.pt")
+                # if opt.save_period > 0 and epoch % opt.save_period == 0:
+                #     torch.save(ckpt, w / f"epoch{epoch}.pt")
+                if best_fitness == fi:
+                    torch.save(ckpt, w / "best_overall.pt")
+                if best_fitness_ap50 == fi_ap50:
+                    torch.save(ckpt, w / "best_ap50.pt")
+                if best_fitness_p == fi_p:
+                    torch.save(ckpt, w / "best_p.pt")
+                if best_fitness_r == fi_r:
+                    torch.save(ckpt, w / "best_r.pt")
+                if best_fitness_f1 == fi_f1:
+                    torch.save(ckpt, w / "best_f1.pt")
+                if best_fitness_ap == fi_ap:
+                    torch.save(ckpt, w / "best_ap.pt")
                 del ckpt
                 callbacks.run("on_model_save", last, epoch, final_epoch, best_fitness, fi)
 
@@ -542,6 +582,7 @@ def main(
     # Parse arguments
     root     = core.Path(root)
     weights  = core.to_list(weights)
+    weights  = weights[0] if isinstance(weights, list) else weights
     model    = core.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
     model    = str(model.config_file())
@@ -712,13 +753,10 @@ def main(
             callbacks = Callbacks()
             # Write mutation results
             keys = (
-                "metrics/precision@0.5(B)",
-                "metrics/recall@0.5(B)",
-                "metrics/f1@0.5(B)",
+                "metrics/precision(B)",
+                "metrics/recall(B)",
+                "metrics/f1(B)",
                 "metrics/map@0.5(B)",
-                "metrics/precision@0.5-0.95(B)",
-                "metrics/recall@0.5-0.95(B)",
-                "metrics/f1@0.5-0.95(B)",
                 "metrics/map@0.5-0.95(B)",
                 "val/box_loss",
                 "val/obj_loss",

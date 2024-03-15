@@ -27,7 +27,7 @@ from utils import general
 from utils.callbacks import Callbacks
 from utils.dataloaders import create_dataloader
 from utils.general import (
-    LOGGER, check_dataset, check_img_size, check_requirements, check_yaml, coco80_to_coco91_class, colorstr, LOGGER,
+    check_dataset, check_img_size, check_requirements, check_yaml, coco80_to_coco91_class, colorstr, LOGGER,
     non_max_suppression, print_args, Profile, scale_boxes, TQDM_BAR_FORMAT, xywh2xyxy, xyxy2xywh,
 )
 from utils.metrics import ap_per_class, box_iou, ConfusionMatrix
@@ -298,12 +298,8 @@ def run(
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
         tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plots, save_dir=save_dir, names=names)
-        # ap50, ap               = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-        # mp, mr, map50, map     = p.mean(), r.mean(), ap50.mean(), ap.mean()
-        p50, r50, f150, ap50     = p[:, 0], r[:, 0], f1[:, 0], ap[:, 0]              # [P@0.5, R@0.5, F1@0.5, AP@0.5]
-        p, r, f1, ap             = p.mean(1), r.mean(1), f1.mean(1), ap.mean(1)      # [P@0.5:0.95, R@0.5:0.95, F1@0.5:0.95, AP@0.5:0.95]
-        mp50, mr50, mf150, map50 = p50.mean(), r50.mean(), f150.mean(), ap50.mean()  # [mP@0.5, mR@0.5, mF1@0.5, mAP@0.5]
-        mp, mr, mf1, map         = p.mean(), r.mean(), f1.mean(), ap.mean()          # [mP@0.5:0.95, mR@0.5:0.95, mF1@0.5:0.95, mAP@0.5:0.95]
+        ap50, ap                       = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+        mp, mr, mf1, map50, map        = p.mean(), r.mean(), f1.mean(), ap50.mean(), ap.mean()
     nt = np.bincount(stats[3].astype(int), minlength=nc)  # number of targets per class
 
     # Print results
@@ -362,7 +358,7 @@ def run(
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp50, mr50, mf150, map50, mp, mr, mf1, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
 
 # endregion
 
