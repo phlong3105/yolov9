@@ -366,15 +366,18 @@ def run(
 # region Main
 
 @click.command(name="val", context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
-@click.option("--root",       type=str, default=None, help="Project root.")
-@click.option("--config",     type=str, default=None, help="Model config.")
-@click.option("--weights",    type=str, default=None, help="Weights paths.")
-@click.option("--model",      type=str, default=None, help="Model name.")
-@click.option("--data",       type=str, default=None, help="Source data directory.")
-@click.option("--fullname",   type=str, default=None, help="Save results to root/run/predict/fullname.")
-@click.option("--save-dir",   type=str, default=None, help="Optional saving directory.")
-@click.option("--device",     type=str, default=None, help="Running devices.")
-@click.option("--imgsz",      type=int, default=None, help="Image sizes.")
+@click.option("--root",       type=str,   default=None, help="Project root.")
+@click.option("--config",     type=str,   default=None, help="Model config.")
+@click.option("--weights",    type=str,   default=None, help="Weights paths.")
+@click.option("--model",      type=str,   default=None, help="Model name.")
+@click.option("--data",       type=str,   default=None, help="Source data directory.")
+@click.option("--fullname",   type=str,   default=None, help="Save results to root/run/predict/fullname.")
+@click.option("--save-dir",   type=str,   default=None, help="Optional saving directory.")
+@click.option("--device",     type=str,   default=None, help="Running devices.")
+@click.option("--imgsz",      type=int,   default=None, help="Image sizes.")
+@click.option("--conf-thres", type=float, default=None, help="Confidence threshold.")
+@click.option("--iou-thres",  type=float, default=None, help="IoU threshold.")
+@click.option("--max-det",    type=int,   default=None, help="Max detections per image.")
 @click.option("--resize",     is_flag=True)
 @click.option("--benchmark",  is_flag=True)
 @click.option("--save-image", is_flag=True)
@@ -389,6 +392,9 @@ def main(
     save_dir  : str,
     device    : str,
     imgsz     : int,
+    conf_thres: float,
+    iou_thres : float,
+    max_det   : int,
     resize    : bool,
     benchmark : bool,
     save_image: bool,
@@ -401,15 +407,18 @@ def main(
     args     = core.load_config(config)
     
     # Prioritize input args --> config file args
-    root     = root     or args["root"]
-    weights  = weights  or args["weights"]
-    model    = model    or args["model"]
-    data     = data     or args["data"]
-    project  = args["project"]
-    fullname = fullname or args["name"]
-    device   = device   or args["device"]
-    imgsz    = imgsz    or args["imgsz"]
-    verbose  = verbose  or args["verbose"]
+    root       = root       or args["root"]
+    weights    = weights    or args["weights"]
+    model      = model      or args["model"]
+    data       = data       or args["data"]
+    project    = args["project"]
+    fullname   = fullname   or args["name"]
+    device     = device     or args["device"]
+    imgsz      = imgsz      or args["imgsz"]
+    conf_thres = conf_thres or args["conf_thres"]
+    iou_thres  = iou_thres  or args["iou_thres"]
+    max_det    = max_det    or args["max_det"]
+    verbose    = verbose    or args["verbose"]
     
     # Parse arguments
     root     = core.Path(root)
@@ -427,17 +436,20 @@ def main(
     imgsz    = core.to_list(imgsz)
     
     # Update arguments
-    args["root"]     = root
-    args["config"]   = config
-    args["weights"]  = weights
-    args["model"]    = model
-    args["data"]     = data
-    args["project"]  = project
-    args["name"]     = fullname
-    args["save_dir"] = save_dir
-    args["device"]   = device
-    args["imgsz"]    = imgsz
-    args["verbose"]  = verbose
+    args["root"]       = root
+    args["config"]     = config
+    args["weights"]    = weights
+    args["model"]      = model
+    args["data"]       = data
+    args["project"]    = project
+    args["name"]       = fullname
+    args["save_dir"]   = save_dir
+    args["device"]     = device
+    args["imgsz"]      = imgsz
+    args["conf_thres"] = conf_thres
+    args["iou_thres"]  = iou_thres
+    args["max_det"]    = max_det
+    args["verbose"]    = verbose
     
     opt            = argparse.Namespace(**args)
     opt.data       = check_yaml(opt.data)  # check YAML

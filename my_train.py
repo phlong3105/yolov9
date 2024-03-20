@@ -534,16 +534,19 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 # region Main
 
 @click.command(name="train", context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
-@click.option("--root",       type=str, default=None, help="Project root.")
-@click.option("--config",     type=str, default=None, help="Model config.")
-@click.option("--weights",    type=str, default=None, help="Weights paths.")
-@click.option("--model",      type=str, default=None, help="Model name.")
-@click.option("--fullname",   type=str, default=None, help="Save results to root/run/train/fullname.")
-@click.option("--save-dir",   type=str, default=None, help="Optional saving directory.")
-@click.option("--device",     type=str, default=None, help="Running devices.")
-@click.option("--local-rank", type=int, default=-1,   help="DDP parameter, do not modify.")
-@click.option("--epochs",     type=int, default=None, help="Stop training once this number of epochs is reached.")
-@click.option("--steps",      type=int, default=None, help="Stop training once this number of steps is reached.")
+@click.option("--root",       type=str,   default=None, help="Project root.")
+@click.option("--config",     type=str,   default=None, help="Model config.")
+@click.option("--weights",    type=str,   default=None, help="Weights paths.")
+@click.option("--model",      type=str,   default=None, help="Model name.")
+@click.option("--fullname",   type=str,   default=None, help="Save results to root/run/train/fullname.")
+@click.option("--save-dir",   type=str,   default=None, help="Optional saving directory.")
+@click.option("--device",     type=str,   default=None, help="Running devices.")
+@click.option("--local-rank", type=int,   default=-1,   help="DDP parameter, do not modify.")
+@click.option("--epochs",     type=int,   default=None, help="Stop training once this number of epochs is reached.")
+@click.option("--steps",      type=int,   default=None, help="Stop training once this number of steps is reached.")
+@click.option("--conf-thres", type=float, default=None, help="Confidence threshold.")
+@click.option("--iou-thres",  type=float, default=None, help="IoU threshold.")
+@click.option("--max-det",    type=int,   default=None, help="Max detections per image.")
 @click.option("--exist-ok",   is_flag=True)
 @click.option("--verbose",    is_flag=True)
 def main(
@@ -557,6 +560,9 @@ def main(
     device    : str,
     epochs    : int,
     steps     : int,
+    conf_thres: float,
+    iou_thres : float,
+    max_det   : int,
     exist_ok  : bool,
     verbose   : bool,
 ) -> str:
@@ -567,17 +573,20 @@ def main(
     args     = core.load_config(config)
     
     # Prioritize input args --> config file args
-    root     = root     or args["root"]
-    weights  = weights  or args["weights"]
-    model    = model    or args["model"]
-    data     = args["data"]
-    project  = args["project"]
-    fullname = fullname or args["name"]
-    device   = device   or args["device"]
-    hyp      = args["hyp"]
-    epochs   = epochs   or args["epochs"]
-    exist_ok = exist_ok or args["exist_ok"]
-    verbose  = verbose  or args["verbose"]
+    root       = root       or args["root"]
+    weights    = weights    or args["weights"]
+    model      = model      or args["model"]
+    data       = args["data"]
+    project    = args["project"]
+    fullname   = fullname   or args["name"]
+    device     = device     or args["device"]
+    hyp        = args["hyp"]
+    epochs     = epochs     or args["epochs"]
+    conf_thres = conf_thres or args["conf_thres"]
+    iou_thres  = iou_thres  or args["iou_thres"]
+    max_det    = max_det    or args["max_det"]
+    exist_ok   = exist_ok   or args["exist_ok"]
+    verbose    = verbose    or args["verbose"]
     
     # Parse arguments
     root     = core.Path(root)
@@ -610,6 +619,9 @@ def main(
     args["hyp"]        = hyp
     args["epochs"]     = epochs
     args["steps"]      = steps
+    args["conf_thres"] = conf_thres
+    args["iou_thres"]  = iou_thres
+    args["max_det"]    = max_det
     args["exist_ok"]   = exist_ok
     args["verbose"]    = verbose
     
