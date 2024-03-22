@@ -426,6 +426,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             fi_ap50 = fitness_ap50(np.array(results).reshape(1, -1))    # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
             fi_ap   = fitness_ap(np.array(results).reshape(1, -1))      # weighted combination of [P, R, F1, mAP@0.5, mAP@0.5:0.95]
             
+            results = list(results)
+            results.insert(2, fi_f1)
+            
             if fi > best_fitness:
                 best_fitness      = fi
             if fi_ap50 > best_fitness_ap50:
@@ -438,10 +441,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 best_fitness_f1   = fi_f1
             if fi_ap > best_fitness_ap:
                 best_fitness_ap   = fi_ap
-                
+            
+            # Write
             stop     = stopper(epoch=epoch, fitness=fi)  # early stop check
-            results  = list(results)
-            results.insert(2, fi_f1)
             log_vals = list(mloss) + list(results) + lr
             callbacks.run('on_fit_epoch_end', log_vals, epoch, best_fitness, fi)
             
