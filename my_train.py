@@ -88,8 +88,13 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # Directories
     w    = save_dir / "weights"           
     w.mkdir(parents=True, exist_ok=True)
-    last = w / "last.pt"
-    best = w / "best.pt"
+    last      = w / "last.pt"
+    best      = w / "best.pt"
+    best_p    = w / "best_p.pt"
+    best_r    = w / "best_r.pt"
+    best_f1   = w / "best_f1.pt"
+    best_ap50 = w / "best_ap50.pt"
+    best_ap   = w / "best_ap.pt"
     
     # Hyperparameters
     if isinstance(hyp, str):
@@ -471,18 +476,19 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                     torch.save(ckpt, best)
                 # if opt.save_period > 0 and epoch % opt.save_period == 0:
                 #     torch.save(ckpt, w / f"epoch{epoch}.pt")
-                if best_fitness == fi:
-                    torch.save(ckpt, w / "best_overall.pt")
-                if best_fitness_ap50 == fi_ap50:
-                    torch.save(ckpt, w / "best_ap50.pt")
+                # if best_fitness == fi:
+                #     torch.save(ckpt, w / "best_overall.pt")
+                
                 if best_fitness_p == fi_p:
-                    torch.save(ckpt, w / "best_p.pt")
+                    torch.save(ckpt, w / best_p)
                 if best_fitness_r == fi_r:
-                    torch.save(ckpt, w / "best_r.pt")
+                    torch.save(ckpt, w / best_r)
                 if best_fitness_f1 == fi_f1:
-                    torch.save(ckpt, w / "best_f1.pt")
+                    torch.save(ckpt, w / best_f1)
+                if best_fitness_ap50 == fi_ap50:
+                    torch.save(ckpt, best_ap50)
                 if best_fitness_ap == fi_ap:
-                    torch.save(ckpt, w / "best_ap.pt")
+                    torch.save(ckpt, w / best_ap)
                 del ckpt
                 callbacks.run("on_model_save", last, epoch, final_epoch, best_fitness, fi)
 
@@ -499,7 +505,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # end training -----------------------------------------------------------------------------------------------------
     if RANK in {-1, 0}:
         LOGGER.info(f"\n{epoch - start_epoch + 1} epochs completed in {(time.time() - t0) / 3600:.3f} hours.")
-        for f in last, best:
+        for f in last, best, best_p, best_r, best_f1, best_ap50, best_ap:
             if f.exists():
                 strip_optimizer(f)  # strip optimizers
                 if f is best:
