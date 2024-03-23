@@ -12,6 +12,7 @@ from pathlib import Path
 
 import click
 import torch
+import yaml
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLO root directory
@@ -23,10 +24,11 @@ from models.common import DetectMultiBackend
 from mon import core
 from utils.dataloaders import IMG_FORMATS, LoadImages, LoadScreenshots, LoadStreams, VID_FORMATS
 from utils.general import (
-    LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2, increment_path,
+    LOGGER, check_file, check_img_size, check_imshow, colorstr, cv2, increment_path,
     non_max_suppression, Profile, scale_boxes, strip_optimizer, xyxy2xywh,
 )
-from utils.plots import Annotator, colors, save_one_box
+import utils.plots
+from utils.plots import Annotator, save_one_box
 from utils.my_torch_utils import select_device, smart_inference_mode
 
 console       = core.console
@@ -81,7 +83,12 @@ def run(opt, nosave: bool = False):
     model  = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
     stride, names, pt = model.stride, model.names, model.pt
     imgsz  = check_img_size(imgsz, s=stride)  # check image size
-
+    
+    colors = utils.plots.colors
+    with open(opt.data, encoding="utf-8") as f:
+        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
+        colors    = data_dict.get("colors", colors)
+        
     # Dataloader
     bs = 1  # batch_size
     if webcam:
