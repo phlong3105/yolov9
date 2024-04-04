@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import DetectMultiBackend
-from mon import core, DATA_DIR
+import mon
 from utils import general
 from utils.callbacks import Callbacks
 from utils.dataloaders import create_dataloader
@@ -34,10 +34,10 @@ from utils.metrics import ap_per_class, box_iou, ConfusionMatrix
 from utils.plots import output_to_target, plot_images, plot_val_study
 from utils.my_torch_utils import select_device, smart_inference_mode
 
-general.DATASETS_DIR = DATA_DIR
+general.DATASETS_DIR = mon.DATA_DIR
 
-console       = core.console
-_current_file = core.Path(__file__).absolute()
+console       = mon.console
+_current_file = mon.Path(__file__).absolute()
 _current_dir  = _current_file.parents[0]
 
 
@@ -123,7 +123,7 @@ def run(
     min_items    = 0                ,  # Experimental
     model        = None,
     dataloader   = None,
-    save_dir     = core.Path(""),
+    save_dir     = mon.Path(""),
     plots        = True,
     callbacks    = Callbacks(),
     compute_loss = None,
@@ -141,7 +141,7 @@ def run(
         device  = select_device(device, batch_size=batch_size)
 
         # Directories
-        # save_dir = increment_path(core.Path(project) / name, exist_ok=exist_ok)  # increment run
+        # save_dir = increment_path(mon.Path(project) / name, exist_ok=exist_ok)  # increment run
         # (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         (save_dir / "images" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
@@ -253,7 +253,7 @@ def run(
         for si, pred in enumerate(preds):
             labels      = targets[targets[:, 0] == si, 1:]
             nl, npr     = labels.shape[0], pred.shape[0]  # number of labels, predictions
-            path, shape = core.Path(paths[si]), shapes[si][0]
+            path, shape = mon.Path(paths[si]), shapes[si][0]
             correct     = torch.zeros(npr, niou, dtype=torch.bool, device=device)  # init
             seen       += 1
 
@@ -326,8 +326,8 @@ def run(
 
     # Save JSON
     if save_json and len(jdict):
-        w         = core.Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
-        anno_json = str(core.Path(data.get("path", "../coco")) / "annotations/instances_val2017.json")  # annotations json
+        w         = mon.Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
+        anno_json = str(mon.Path(data.get("path", "../coco")) / "annotations/instances_val2017.json")  # annotations json
         pred_json = str(save_dir / f"{w}_predictions.json")  # predictions json
         LOGGER.info(f"\nEvaluating pycocotools mAP... saving {pred_json}...")
         with open(pred_json, "w") as f:
@@ -342,7 +342,7 @@ def run(
             pred = anno.loadRes(pred_json)  # init predictions api
             eval = COCOeval(anno, pred, "bbox")
             if is_coco:
-                eval.params.imgIds = [int(core.Path(x).stem) for x in dataloader.dataset.im_files]  # image IDs to evaluate
+                eval.params.imgIds = [int(mon.Path(x).stem) for x in dataloader.dataset.im_files]  # image IDs to evaluate
             eval.evaluate()
             eval.accumulate()
             eval.summarize()
@@ -403,8 +403,8 @@ def main(
     hostname = socket.gethostname().lower()
     
     # Get config args
-    config   = core.parse_config_file(project_root=_current_dir / "config", config=config)
-    args     = core.load_config(config)
+    config   = mon.parse_config_file(project_root=_current_dir / "config", config=config)
+    args     = mon.load_config(config)
     
     # Prioritize input args --> config file args
     root       = root       or args.get("root")
@@ -421,18 +421,18 @@ def main(
     verbose    = verbose    or args.get("verbose")
     
     # Parse arguments
-    root     = core.Path(root)
-    weights  = core.to_list(weights)
-    model    = core.Path(model)
+    root     = mon.Path(root)
+    weights  = mon.to_list(weights)
+    model    = mon.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
     model    = str(model.config_file())
-    data     = core.Path(data)
+    data     = mon.Path(data)
     data     = data  if data.exists() else _current_dir / "data"  / data.name
     data     = str(data.config_file())
     project  = root.name or project
     save_dir = save_dir  or root / "run" / "test" / fullname
-    save_dir = core.Path(save_dir)
-    imgsz    = core.to_list(imgsz)
+    save_dir = mon.Path(save_dir)
+    imgsz    = mon.to_list(imgsz)
     
     # Update arguments
     args["root"]       = root
@@ -475,7 +475,7 @@ def main(
         elif opt.task == "study":  # speed vs mAP benchmarks
             # python val.py --task study --data coco.yaml --iou 0.7 --weights yolo.pt...
             for opt.weights in weights:
-                f = f"study_{core.Path(opt.data).stem}_{core.Path(opt.weights).stem}.txt"  # filename to save to
+                f = f"study_{mon.Path(opt.data).stem}_{mon.Path(opt.weights).stem}.txt"  # filename to save to
                 x, y = list(range(256, 1536 + 128, 128)), []  # x axis (image sizes), y axis
                 for opt.imgsz in x:  # img-size
                     LOGGER.info(f"\nRunning {f} --imgsz {opt.imgsz}...")

@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import DetectMultiBackend
-from mon import core
+import mon
 from utils.dataloaders import IMG_FORMATS, LoadImages, LoadScreenshots, LoadStreams, VID_FORMATS
 from utils.general import (
     LOGGER, check_file, check_img_size, check_imshow, colorstr, cv2, increment_path,
@@ -31,8 +31,8 @@ import utils.plots
 from utils.plots import Annotator, save_one_box
 from utils.my_torch_utils import select_device, smart_inference_mode
 
-console       = core.console
-_current_file = core.Path(__file__).absolute()
+console       = mon.console
+_current_file = mon.Path(__file__).absolute()
 _current_dir  = _current_file.parents[0]
 
 
@@ -44,7 +44,7 @@ def run(opt, nosave: bool = False):
     weights        = weights[0] if isinstance(weights, list | tuple) and len(weights) == 1 else weights
     source         = opt.source
     data           = opt.data
-    save_dir       = core.Path(opt.save_dir)
+    save_dir       = mon.Path(opt.save_dir)
     imgsz          = opt.imgsz
     conf_thres     = opt.conf_thres
     iou_thres      = opt.iou_thres
@@ -65,7 +65,7 @@ def run(opt, nosave: bool = False):
     hide_conf      = opt.hide_conf
     
     save_img   = not nosave and not source.endswith(".txt")  # save inference images
-    is_file    = core.Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
+    is_file    = mon.Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
     is_url     = source.lower().startswith(("rtsp://", "rtmp://", "http://", "https://"))
     webcam     = source.isnumeric() or source.endswith(".txt") or (is_url and not is_file)
     screenshot = source.lower().startswith("screen")
@@ -73,7 +73,7 @@ def run(opt, nosave: bool = False):
         source = check_file(source)  # download
 
     # Directories
-    # save_dir = increment_path(core.Path(project) / name, exist_ok=exist_ok)  # increment run
+    # save_dir = increment_path(mon.Path(project) / name, exist_ok=exist_ok)  # increment run
     # (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
     (save_dir / "images" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
     (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
@@ -114,7 +114,7 @@ def run(opt, nosave: bool = False):
 
         # Inference
         with dt[1]:
-            visualize = increment_path(save_dir / core.Path(path).stem, mkdir=True) if visualize else False
+            visualize = increment_path(save_dir / mon.Path(path).stem, mkdir=True) if visualize else False
             pred      = model(im, augment=augment, visualize=visualize)
 
         # NMS
@@ -141,7 +141,7 @@ def run(opt, nosave: bool = False):
             else:
                 p, im0, frame = path, im0s.copy(), getattr(dataset, "frame", 0)
 
-            p         = core.Path(p)  # to Path
+            p         = mon.Path(p)  # to Path
             save_path = str(save_dir / "images" / f"{p.stem}.jpg")
             txt_path  = str(save_dir / "labels" / p.stem) + ("" if dataset.mode == "image" else f"_{frame}")  # im.txt
             s        += "%gx%g " % im.shape[2:]  # print string
@@ -197,7 +197,7 @@ def run(opt, nosave: bool = False):
                             h   = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
-                        save_path     = str(core.Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+                        save_path     = str(mon.Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
 
@@ -262,8 +262,8 @@ def main(
     hostname = socket.gethostname().lower()
     
     # Get config args
-    config   = core.parse_config_file(project_root=_current_dir / "config", config=config)
-    args     = core.load_config(config)
+    config   = mon.parse_config_file(project_root=_current_dir / "config", config=config)
+    args     = mon.load_config(config)
     
     # Prioritize input args --> config file args
     root         = root         or args.get("root")
@@ -282,18 +282,18 @@ def main(
     verbose      = verbose      or args.get("verbose")
     
     # Parse arguments
-    root     = core.Path(root)
-    weights  = core.to_list(weights)
-    model    = core.Path(model)
+    root     = mon.Path(root)
+    weights  = mon.to_list(weights)
+    model    = mon.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
     model    = str(model.config_file())
-    data_    = core.Path(args.get("data"))
+    data_    = mon.Path(args.get("data"))
     data_    = data_ if data_.exists() else _current_dir / "data" / data_.name
     data_    = str(data_.config_file())
     project  = root.name or project
     save_dir = save_dir  or root / "run" / "predict" / model
-    save_dir = core.Path(save_dir)
-    imgsz    = core.to_list(imgsz)
+    save_dir = mon.Path(save_dir)
+    imgsz    = mon.to_list(imgsz)
     
     # Update arguments
     args["root"]         = root

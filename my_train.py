@@ -22,6 +22,8 @@ import yaml
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
+from mon import nn
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLO root directory
 if str(ROOT) not in sys.path:
@@ -31,8 +33,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 import my_val as validate  # for end-of-epoch mAP
 from models.experimental import attempt_load
 from models.yolo import Model
-from mon import core, nn
-from mon.globals import DATA_DIR
+import mon
 from utils import general
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
@@ -58,10 +59,10 @@ RANK       = int(os.getenv("RANK",       -1))
 WORLD_SIZE = int(os.getenv("WORLD_SIZE",  1))
 GIT_INFO   = None
 
-general.DATASETS_DIR = DATA_DIR
+general.DATASETS_DIR = mon.DATA_DIR
 
-console       = core.console
-_current_file = core.Path(__file__).absolute()
+console       = mon.console
+_current_file = mon.Path(__file__).absolute()
 _current_dir  = _current_file.parents[0]
 
 
@@ -72,7 +73,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     weights    = opt.weights
     weights    = weights[0] if isinstance(weights, list | tuple) else weights
     data       = opt.data
-    save_dir   = core.Path(opt.save_dir)
+    save_dir   = mon.Path(opt.save_dir)
     epochs     = opt.epochs
     batch_size = opt.batch_size
     single_cls = opt.single_cls
@@ -577,8 +578,8 @@ def main(
     hostname = socket.gethostname().lower()
     
     # Get config args
-    config   = core.parse_config_file(project_root=_current_dir / "config", config=config)
-    args     = core.load_config(config)
+    config   = mon.parse_config_file(project_root=_current_dir / "config", config=config)
+    args     = mon.load_config(config)
     
     # Prioritize input args --> config file args
     root       = root       or args.get("root")
@@ -597,19 +598,19 @@ def main(
     verbose    = verbose    or args.get("verbose")
     
     # Parse arguments
-    root     = core.Path(root)
-    weights  = core.to_list(weights)
+    root     = mon.Path(root)
+    weights  = mon.to_list(weights)
     weights  = weights[0] if isinstance(weights, list) else weights
-    model    = core.Path(model)
+    model    = mon.Path(model)
     model    = model if model.exists() else _current_dir / "config"  / model.name
     model    = str(model.config_file())
-    data     = core.Path(data)
+    data     = mon.Path(data)
     data     = data  if data.exists() else _current_dir / "data" / data.name
     data     = str(data.config_file())
     project  = root.name or project
     save_dir = save_dir  or root / "run" / "train" / fullname
-    save_dir = core.Path(save_dir)
-    hyp      = core.Path(hyp)
+    save_dir = mon.Path(save_dir)
+    hyp      = mon.Path(hyp)
     hyp      = hyp if hyp.exists() else _current_dir / "data/hyps" / hyp.name
     hyp      = str(hyp.yaml_file())
     
@@ -636,8 +637,8 @@ def main(
     opt = argparse.Namespace(**args)
     
     if not exist_ok:
-        core.delete_dir(paths=core.Path(opt.save_dir))
-    core.Path(opt.save_dir).mkdir(parents=True, exist_ok=True)
+        mon.delete_dir(paths=mon.Path(opt.save_dir))
+    mon.Path(opt.save_dir).mkdir(parents=True, exist_ok=True)
     
     # Checks
     if RANK in {-1, 0}:
@@ -647,7 +648,7 @@ def main(
 
     # Resume (from specified or most recent last.pt)
     if opt.resume and not check_comet_resume(opt) and not opt.evolve:
-        last     = core.Path(check_file(opt.resume) if isinstance(opt.resume, str) else get_latest_run())
+        last     = mon.Path(check_file(opt.resume) if isinstance(opt.resume, str) else get_latest_run())
         opt_yaml = last.parent.parent / "opt.yaml"  # train options yaml
         opt_data = opt.data  # original dataset
         if opt_yaml.is_file():
@@ -670,8 +671,8 @@ def main(
             opt.save_dir = root / "run" / "evolve" / project / fullname
             opt.exist_ok, opt.resume = opt.resume, False  # pass resume to exist_ok and disable resume
         if opt.name == "cfg":
-            opt.name = core.Path(opt.model).stem  # use model.yaml as name
-        opt.save_dir = str(increment_path(core.Path(opt.save_dir), exist_ok=opt.exist_ok))
+            opt.name = mon.Path(opt.model).stem  # use model.yaml as name
+        opt.save_dir = str(increment_path(mon.Path(opt.save_dir), exist_ok=opt.exist_ok))
 
     # DDP mode
     device = select_device(opt.device, batch_size=opt.batch_size)
@@ -730,7 +731,7 @@ def main(
                 hyp["anchors"] = 3
         if opt.noautoanchor:
             del hyp["anchors"], meta["anchors"]
-        opt.noval, opt.nosave, save_dir = True, True, core.Path(opt.save_dir)  # only val/save final epoch
+        opt.noval, opt.nosave, save_dir = True, True, mon.Path(opt.save_dir)  # only val/save final epoch
         # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
         evolve_yaml, evolve_csv = save_dir / "hyp_evolve.yaml", save_dir / "evolve.csv"
         if opt.bucket:
