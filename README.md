@@ -38,9 +38,11 @@ Custom training: https://github.com/WongKinYiu/yolov9/issues/30#issuecomment-196
     
 ONNX export: https://github.com/WongKinYiu/yolov9/issues/2#issuecomment-1960519506 https://github.com/WongKinYiu/yolov9/issues/40#issue-2150697688 https://github.com/WongKinYiu/yolov9/issues/130#issue-2162045461
 
+ONNX export for segmentation: https://github.com/WongKinYiu/yolov9/issues/260#issue-2191162150
+
 TensorRT inference: https://github.com/WongKinYiu/yolov9/issues/143#issuecomment-1975049660 https://github.com/WongKinYiu/yolov9/issues/34#issue-2150393690 https://github.com/WongKinYiu/yolov9/issues/79#issue-2153547004 https://github.com/WongKinYiu/yolov9/issues/143#issue-2164002309
 
-QAT TensirRT: https://github.com/WongKinYiu/yolov9/issues/253#issue-2189520073
+QAT TensorRT: https://github.com/WongKinYiu/yolov9/issues/327#issue-2229284136 https://github.com/WongKinYiu/yolov9/issues/253#issue-2189520073
 
 OpenVINO: https://github.com/WongKinYiu/yolov9/issues/164#issue-2168540003
 
@@ -63,6 +65,8 @@ YOLOv9 ROS TensorRT: https://github.com/WongKinYiu/yolov9/issues/145#issue-21642
 YOLOv9 Julia: https://github.com/WongKinYiu/yolov9/issues/141#issuecomment-1973710107
 
 YOLOv9 MLX: https://github.com/WongKinYiu/yolov9/issues/258#issue-2190586540
+
+YOLOv9 StrongSORT with OSNet: https://github.com/WongKinYiu/yolov9/issues/299#issue-2212093340
 
 YOLOv9 ByteTrack: https://github.com/WongKinYiu/yolov9/issues/78#issue-2153512879
 
@@ -301,11 +305,11 @@ python panoptic/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --i
 python caption/train.py --workers 8 --device 0 --batch 32  --data coco.yaml --img 640 --cfg models/caption/gelan-c-cap.yaml --weights '' --name gelan-c-cap --hyp hyp.scratch-high.yaml --no-overlap --epochs 300 --close-mosaic 10
 ```
 
-| Model | Test Size | Param. | FLOPs |  AP<sup>box</sup> | AP<sup>mask</sup>  | mIoU<sup>semantic</sup>  | mIoU<sup>stuff</sup> | PQ<sup>panoptic</sup> | BLEU@4<sup>caption</sup> | CIDEr<sup>caption</sup> |
+| Model | Test Size | Param. | FLOPs |  AP<sup>box</sup> | AP<sup>mask</sup>  | mIoU<sub>164k/10k</sub><sup>semantic</sup>  | mIoU<sup>stuff</sup> | PQ<sup>panoptic</sup> | BLEU@4<sup>caption</sup> | CIDEr<sup>caption</sup> |
 | :-- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| [**YOLOR-MT**]() | 640 | 79.3M | - | **51.0%** | **41.7%** | **49.6%** | **55.9%** | **40.5%** | **35.7** | **112.7** |
-<!--| [**GELAN-C-CAP**]() | 640 |  |  | **-** | **-** | **-** | **-** | **-** | **-** | **-** |
-| [**YOLOv9-C-CAP**]() | 640 |  |  | **-** | **-** | **-** | **-** | **-** | **-** | **-** |-->
+| [**GELAN-C-CAP**]() | 640 | 47.5M | - | **51.9%** | **42.6%** | **42.5%/-** | **56.5%** | **41.7%** | **38.8** | **122.3** |
+<!--| [**YOLOv9-C-CAP**]() | 640 |  |  | **-** | **-** | **-** | **-** | **-** | **-** | **-** |-->
+<!--| [**YOLOR-MT**]() | 640 | 79.3M | - | **51.0%** | **41.7%** | **-/49.6%** | **55.9%** | **40.5%** | **35.7** | **112.7** |-->
 
 
 ## Acknowledgements
