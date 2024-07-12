@@ -365,121 +365,48 @@ def run(
 
 # region Main
 
-@click.command(name="val", context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
-@click.option("--root",       type=str,   default=None, help="Project root.")
-@click.option("--config",     type=str,   default=None, help="Model config.")
-@click.option("--weights",    type=str,   default=None, help="Weights paths.")
-@click.option("--model",      type=str,   default=None, help="Model name.")
-@click.option("--data",       type=str,   default=None, help="Source data directory.")
-@click.option("--fullname",   type=str,   default=None, help="Save results to root/run/predict/fullname.")
-@click.option("--save-dir",   type=str,   default=None, help="Optional saving directory.")
-@click.option("--device",     type=str,   default=None, help="Running devices.")
-@click.option("--imgsz",      type=int,   default=None, help="Image sizes.")
-@click.option("--conf-thres", type=float, default=None, help="Confidence threshold.")
-@click.option("--iou-thres",  type=float, default=None, help="IoU threshold.")
-@click.option("--max-det",    type=int,   default=None, help="Max detections per image.")
-@click.option("--resize",     is_flag=True)
-@click.option("--benchmark",  is_flag=True)
-@click.option("--save-image", is_flag=True)
-@click.option("--verbose",    is_flag=True)
-def main(
-    root      : str,
-    config    : str,
-    weights   : str,
-    model     : str,
-    data      : str,
-    fullname  : str,
-    save_dir  : str,
-    device    : str,
-    imgsz     : int,
-    conf_thres: float,
-    iou_thres : float,
-    max_det   : int,
-    resize    : bool,
-    benchmark : bool,
-    save_image: bool,
-    verbose   : bool,
-) -> str:
-    hostname = socket.gethostname().lower()
+def main() -> str:
+    # Parse args
+    args        = mon.parse_predict_args()
+    model       = mon.Path(args.model)
+    model       = model if model.exists() else _current_dir / "config" / model.name
+    model       = str(model.config_file())
+    data_       = mon.Path(args.data)
+    data_       = data_ if data_.exists() else _current_dir / "data" / data_.name
+    data_       = str(data_.config_file())
+    args.model  = model
+    args.source = args.data
+    args.data   = data_
     
-    # Get config args
-    config   = mon.parse_config_file(project_root=_current_dir / "config", config=config)
-    args     = mon.load_config(config)
-    
-    # Prioritize input args --> config file args
-    root       = root       or args.get("root")
-    weights    = weights    or args.get("weights")
-    model      = model      or args.get("model")
-    data       = data       or args.get("data")
-    project    = args.get("project")
-    fullname   = fullname   or args.get("name")
-    device     = device     or args.get("device")
-    imgsz      = imgsz      or args.get("imgsz")
-    conf_thres = conf_thres or args.get("conf_thres")
-    iou_thres  = iou_thres  or args.get("iou_thres")
-    max_det    = max_det    or args.get("max_det")
-    verbose    = verbose    or args.get("verbose")
-    
-    # Parse arguments
-    root     = mon.Path(root)
-    weights  = mon.to_list(weights)
-    model    = mon.Path(model)
-    model    = model if model.exists() else _current_dir / "config"  / model.name
-    model    = str(model.config_file())
-    data     = mon.Path(data)
-    data     = data  if data.exists() else _current_dir / "data"  / data.name
-    data     = str(data.config_file())
-    project  = root.name or project
-    save_dir = save_dir  or root / "run" / "test" / fullname
-    save_dir = mon.Path(save_dir)
-    imgsz    = mon.to_list(imgsz)
-    
-    # Update arguments
-    args["root"]       = root
-    args["config"]     = config
-    args["weights"]    = weights
-    args["model"]      = model
-    args["data"]       = data
-    args["project"]    = project
-    args["name"]       = fullname
-    args["save_dir"]   = save_dir
-    args["device"]     = device
-    args["imgsz"]      = imgsz
-    args["conf_thres"] = conf_thres
-    args["iou_thres"]  = iou_thres
-    args["max_det"]    = max_det
-    args["verbose"]    = verbose
-    
-    opt            = argparse.Namespace(**args)
-    opt.data       = check_yaml(opt.data)  # check YAML
-    opt.save_json |= opt.data.endswith("coco.yaml")
-    opt.save_txt  |= opt.save_hybrid
-    print_args(vars(opt))
+    args.data       = check_yaml(args.data)  # check YAML
+    args.save_json |= args.data.endswith("coco.yaml")
+    args.save_txt  |= args.save_hybrid
+    print_args(vars(args))
     
     # check_requirements(exclude=('tensorboard', 'thop'))
 
-    if opt.task in ("train", "val", "test"):  # run normally
-        if opt.conf_thres > 0.001:  # https://github.com/ultralytics/yolov5/issues/1466
-            LOGGER.info(f"WARNING ⚠️ confidence threshold {opt.conf_thres} > 0.001 produces invalid results")
-        if opt.save_hybrid:
+    if args.task in ("train", "val", "test"):  # run normally
+        if args.conf_thres > 0.001:  # https://github.com/ultralytics/yolov5/issues/1466
+            LOGGER.info(f"WARNING ⚠️ confidence threshold {args.conf_thres} > 0.001 produces invalid results")
+        if args.save_hybrid:
             LOGGER.info("WARNING ⚠️ --save-hybrid will return high mAP from hybrid labels, not from predictions alone")
-        run(**vars(opt))
+        run(**vars(args))
     else:
-        weights  = opt.weights if isinstance(opt.weights, list) else [opt.weights]
-        opt.half = torch.cuda.is_available() and opt.device != "cpu"  # FP16 for fastest results
-        if opt.task == "speed":  # speed benchmarks
+        weights  = args.weights if isinstance(args.weights, list) else [args.weights]
+        args.half = torch.cuda.is_available() and args.device != "cpu"  # FP16 for fastest results
+        if args.task == "speed":  # speed benchmarks
             # python val.py --task speed --data coco.yaml --batch 1 --weights yolo.pt...
-            opt.conf_thres, opt.iou_thres, opt.save_json = 0.25, 0.45, False
-            for opt.weights in weights:
-                run(**vars(opt), plots=False)
-        elif opt.task == "study":  # speed vs mAP benchmarks
+            args.conf_thres, args.iou_thres, args.save_json = 0.25, 0.45, False
+            for args.weights in weights:
+                run(**vars(args), plots=False)
+        elif args.task == "study":  # speed vs mAP benchmarks
             # python val.py --task study --data coco.yaml --iou 0.7 --weights yolo.pt...
-            for opt.weights in weights:
-                f = f"study_{mon.Path(opt.data).stem}_{mon.Path(opt.weights).stem}.txt"  # filename to save to
+            for args.weights in weights:
+                f = f"study_{mon.Path(args.data).stem}_{mon.Path(args.weights).stem}.txt"  # filename to save to
                 x, y = list(range(256, 1536 + 128, 128)), []  # x axis (image sizes), y axis
-                for opt.imgsz in x:  # img-size
-                    LOGGER.info(f"\nRunning {f} --imgsz {opt.imgsz}...")
-                    r, _, t = run(**vars(opt), plots=False)
+                for args.imgsz in x:  # img-size
+                    LOGGER.info(f"\nRunning {f} --imgsz {args.imgsz}...")
+                    r, _, t = run(**vars(args), plots=False)
                     y.append(r + t)  # results and times
                 np.savetxt(f, y, fmt="%10.4g")  # save
                 os.system("zip -r study.zip study_*.txt")

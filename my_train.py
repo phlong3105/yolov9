@@ -542,154 +542,73 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
 # region Main
 
-@click.command(name="train", context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
-@click.option("--root",       type=str,   default=None, help="Project root.")
-@click.option("--config",     type=str,   default=None, help="Model config.")
-@click.option("--weights",    type=str,   default=None, help="Weights paths.")
-@click.option("--model",      type=str,   default=None, help="Model name.")
-@click.option("--fullname",   type=str,   default=None, help="Save results to root/run/train/fullname.")
-@click.option("--save-dir",   type=str,   default=None, help="Optional saving directory.")
-@click.option("--device",     type=str,   default=None, help="Running devices.")
-@click.option("--local-rank", type=int,   default=-1,   help="DDP parameter, do not modify.")
-@click.option("--epochs",     type=int,   default=None, help="Stop training once this number of epochs is reached.")
-@click.option("--steps",      type=int,   default=None, help="Stop training once this number of steps is reached.")
-@click.option("--conf-thres", type=float, default=None, help="Confidence threshold.")
-@click.option("--iou-thres",  type=float, default=None, help="IoU threshold.")
-@click.option("--max-det",    type=int,   default=None, help="Max detections per image.")
-@click.option("--exist-ok",   is_flag=True)
-@click.option("--verbose",    is_flag=True)
-def main(
-    root      : str,
-    config    : str,
-    weights   : str,
-    model     : str,
-    fullname  : str,
-    save_dir  : str,
-    local_rank: int,
-    device    : str,
-    epochs    : int,
-    steps     : int,
-    conf_thres: float,
-    iou_thres : float,
-    max_det   : int,
-    exist_ok  : bool,
-    verbose   : bool,
-) -> str:
-    hostname = socket.gethostname().lower()
-    
-    # Get config args
-    config   = mon.parse_config_file(project_root=_current_dir / "config", config=config)
-    args     = mon.load_config(config)
-    
-    # Prioritize input args --> config file args
-    root       = root       or args.get("root")
-    weights    = weights    or args.get("weights")
-    model      = model      or args.get("model")
-    data       = args.get("data")
-    project    = args.get("project")
-    fullname   = fullname   or args.get("name")
-    device     = device     or args.get("device")
-    hyp        = args.get("hyp")
-    epochs     = epochs     or args.get("epochs")
-    conf_thres = conf_thres or args.get("conf_thres")
-    iou_thres  = iou_thres  or args.get("iou_thres")
-    max_det    = max_det    or args.get("max_det")
-    exist_ok   = exist_ok   or args.get("exist_ok")
-    verbose    = verbose    or args.get("verbose")
-    
+def main() -> str:
     # Parse arguments
-    root     = mon.Path(root)
-    weights  = mon.to_list(weights)
-    weights  = weights[0] if isinstance(weights, list) else weights
-    model    = mon.Path(model)
-    model    = model if model.exists() else _current_dir / "config"  / model.name
-    model    = str(model.config_file())
-    data     = mon.Path(data)
-    data     = data  if data.exists() else _current_dir / "data" / data.name
-    data     = str(data.config_file())
-    project  = root.name or project
-    save_dir = save_dir  or root / "run" / "train" / fullname
-    save_dir = mon.Path(save_dir)
-    hyp      = mon.Path(hyp)
-    hyp      = hyp if hyp.exists() else _current_dir / "data/hyps" / hyp.name
-    hyp      = str(hyp.yaml_file())
-    
-    # Update arguments
-    args["root"]       = root
-    args["config"]     = config
-    args["weights"]    = weights
-    args["model"]      = model
-    args["data"]       = data
-    args["project"]    = project
-    args["name"]       = fullname
-    args["save_dir"]   = save_dir
-    args["device"]     = device
-    args["local_rank"] = local_rank
-    args["hyp"]        = hyp
-    args["epochs"]     = epochs
-    args["steps"]      = steps
-    args["conf_thres"] = conf_thres
-    args["iou_thres"]  = iou_thres
-    args["max_det"]    = max_det
-    args["exist_ok"]   = exist_ok
-    args["verbose"]    = verbose
-    
-    opt = argparse.Namespace(**args)
-    
-    if not exist_ok:
-        mon.delete_dir(paths=mon.Path(opt.save_dir))
-    mon.Path(opt.save_dir).mkdir(parents=True, exist_ok=True)
+    args        = mon.parse_train_args()
+    model       = mon.Path(args.model)
+    model       = model if model.exists() else _current_dir / "config" / model.name
+    model       = str(model.config_file())
+    data_       = mon.Path(args.data)
+    data_       = data_ if data_.exists() else _current_dir / "data" / data_.name
+    data_       = str(data_.config_file())
+    hyp         = mon.Path(args.hyp)
+    hyp         = hyp if hyp.exists() else _current_dir / "data" / "hyps" / hyp.name
+    hyp         = hyp.yaml_file()
+    args.model  = model
+    args.source = args.data
+    args.data   = data_
+    args.hyp    = str(hyp)
     
     # Checks
     if RANK in {-1, 0}:
-        print_args(vars(opt))
+        print_args(vars(args))
         # check_git_status()
         # check_requirements()
 
     # Resume (from specified or most recent last.pt)
-    if opt.resume and not check_comet_resume(opt) and not opt.evolve:
-        last     = mon.Path(check_file(opt.resume) if isinstance(opt.resume, str) else get_latest_run())
-        opt_yaml = last.parent.parent / "opt.yaml"  # train options yaml
-        opt_data = opt.data  # original dataset
+    if args.resume and not check_comet_resume(args) and not args.evolve:
+        last     = mon.Path(check_file(args.resume) if isinstance(args.resume, str) else get_latest_run())
+        opt_yaml = last.parent.parent / "args.yaml"  # train options yaml
+        opt_data = args.data  # original dataset
         if opt_yaml.is_file():
             with open(opt_yaml, errors="ignore") as f:
                 d = yaml.safe_load(f)
         else:
-            d = torch.load(last, map_location="cpu")["opt"]
-        opt = argparse.Namespace(**d)  # replace
-        opt.model, opt.weights, opt.resume = "", str(last), True  # reinstate
+            d = torch.load(last, map_location="cpu")["args"]
+        args = argparse.Namespace(**d)  # replace
+        args.model, args.weights, args.resume = "", str(last), True  # reinstate
         if is_url(opt_data):
-            opt.data = check_file(opt_data)  # avoid HUB resume auth timeout
+            args.data = check_file(opt_data)  # avoid HUB resume auth timeout
     else:
-        opt.data    = check_file(opt.data)
-        opt.model   = check_yaml(opt.model)
-        opt.hyp     = check_yaml(opt.hyp)
-        opt.weights = str(opt.weights)
-        opt.project = str(opt.project) 
-        assert len(opt.model) or len(opt.weights), "either --cfg or --weights must be specified"
-        if opt.evolve:
-            opt.save_dir = root / "run" / "evolve" / project / fullname
-            opt.exist_ok, opt.resume = opt.resume, False  # pass resume to exist_ok and disable resume
-        if opt.name == "cfg":
-            opt.name = mon.Path(opt.model).stem  # use model.yaml as name
-        opt.save_dir = str(increment_path(mon.Path(opt.save_dir), exist_ok=opt.exist_ok))
+        args.data    = check_file(args.data)
+        args.model   = check_yaml(args.model)
+        args.hyp     = check_yaml(args.hyp)
+        args.weights = str(args.weights)
+        args.project = str(args.project) 
+        assert len(args.model) or len(args.weights), "either --cfg or --weights must be specified"
+        if args.evolve:
+            args.save_dir = args.root / "run" / "evolve" / args.project / args.fullname
+            args.exist_ok, args.resume = args.resume, False  # pass resume to exist_ok and disable resume
+        if args.name == "cfg":
+            args.name = mon.Path(args.model).stem  # use model.yaml as name
+        args.save_dir = str(increment_path(mon.Path(args.save_dir), exist_ok=args.exist_ok))
 
     # DDP mode
-    device = select_device(opt.device, batch_size=opt.batch_size)
+    device = select_device(args.device, batch_size=args.batch_size)
     if LOCAL_RANK != -1:
         msg = "is not compatible with YOLO Multi-GPU DDP training"
-        assert not opt.image_weights, f"--image-weights {msg}"
-        assert not opt.evolve, f"--evolve {msg}"
-        assert opt.batch_size != -1, f"AutoBatch with --batch-size -1 {msg}, please pass a valid --batch-size"
-        assert opt.batch_size % WORLD_SIZE == 0, f"--batch-size {opt.batch_size} must be multiple of WORLD_SIZE"
+        assert not args.image_weights, f"--image-weights {msg}"
+        assert not args.evolve, f"--evolve {msg}"
+        assert args.batch_size != -1, f"AutoBatch with --batch-size -1 {msg}, please pass a valid --batch-size"
+        assert args.batch_size % WORLD_SIZE == 0, f"--batch-size {args.batch_size} must be multiple of WORLD_SIZE"
         assert torch.cuda.device_count() > LOCAL_RANK, "insufficient CUDA devices for DDP command"
         torch.cuda.set_device(LOCAL_RANK)
         device = torch.device("cuda", LOCAL_RANK)
         dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")
 
     # Train
-    if not opt.evolve:
-        train(opt.hyp, opt, device, callbacks=Callbacks())
+    if not args.evolve:
+        train(args.hyp, args, device, callbacks=Callbacks())
 
     # Evolve hyperparameters (optional)
     else:
@@ -725,19 +644,19 @@ def main(
             "mixup"          : (1  , 0.0 , 1.0)  ,  # image mixup (probability)
             "copy_paste"     : (1  , 0.0 , 1.0)} ,  # segment copy-paste (probability)
 
-        with open(opt.hyp, errors="ignore") as f:
+        with open(args.hyp, errors="ignore") as f:
             hyp = yaml.safe_load(f)  # load hyps dict
             if "anchors" not in hyp:  # anchors commented in hyp.yaml
                 hyp["anchors"] = 3
-        if opt.noautoanchor:
+        if args.noautoanchor:
             del hyp["anchors"], meta["anchors"]
-        opt.noval, opt.nosave, save_dir = True, True, mon.Path(opt.save_dir)  # only val/save final epoch
+        args.noval, args.nosave, save_dir = True, True, mon.Path(args.save_dir)  # only val/save final epoch
         # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
         evolve_yaml, evolve_csv = save_dir / "hyp_evolve.yaml", save_dir / "evolve.csv"
-        if opt.bucket:
-            os.system(f"gsutil cp gs://{opt.bucket}/evolve.csv {evolve_csv}")  # download evolve.csv if exists
+        if args.bucket:
+            os.system(f"gsutil cp gs://{args.bucket}/evolve.csv {evolve_csv}")  # download evolve.csv if exists
 
-        for _ in range(opt.evolve):  # generations to evolve
+        for _ in range(args.evolve):  # generations to evolve
             if evolve_csv.exists():  # if evolve.csv exists: select best hyps and mutate
                 # Select parent(s)
                 parent = "single"  # parent selection method: "single" or "weighted"
@@ -770,7 +689,7 @@ def main(
                 hyp[k] = round(hyp[k], 5)   # significant digits
 
             # Train mutation
-            results   = train(hyp.copy(), opt, device, callbacks)
+            results   = train(hyp.copy(), args, device, callbacks)
             callbacks = Callbacks()
             # Write mutation results
             keys = (
@@ -783,17 +702,17 @@ def main(
                 "val/obj_loss",
                 "val/cls_loss",
             )
-            print_mutation(keys, results, hyp.copy(), save_dir, opt.bucket)
+            print_mutation(keys, results, hyp.copy(), save_dir, args.bucket)
 
         # Plot results
         plot_evolve(evolve_csv)
         LOGGER.info(
-            f'Hyperparameter evolution finished {opt.evolve} generations\n'
+            f'Hyperparameter evolution finished {args.evolve} generations\n'
             f"Results saved to {colorstr('bold', save_dir)}\n"
             f'Usage example: $ python train.py --hyp {evolve_yaml}'
         )
         
-        return str(opt.save_dir)
+        return str(args.save_dir)
         
 
 if __name__ == "__main__":
