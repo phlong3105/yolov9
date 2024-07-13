@@ -544,7 +544,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
 def main() -> str:
     # Parse arguments
-    args        = mon.parse_train_args()
+    args        = mon.parse_train_args(model_root=_current_dir)
     model       = mon.Path(args.model)
     model       = model if model.exists() else _current_dir / "config" / model.name
     model       = str(model.config_file())
